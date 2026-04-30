@@ -1,0 +1,18 @@
+firmware:
+  - src/firmware/**
+
+simulation:
+  - src/simulation/**
+
+control:
+  - src/control/**
+
+documentation:
+  - docs/**
+  - "**/*.md"
+
+ci:
+  - .github/workflows/**
+
+tests:
+  - tests/**

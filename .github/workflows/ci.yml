@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ── Python: lint and test ────────────────────────────────────────────────
+  python:
+    name: Python Lint & Test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest
+          pip install -r src/control/requirements.txt
+          pip install -r src/simulation/requirements.txt
+
+      - name: Lint with ruff
+        run: ruff check src/control src/simulation tests
+
+      - name: Check formatting with ruff
+        run: ruff format --check src/control src/simulation tests
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  # ── ESP32 Firmware: build check ─────────────────────────────────────────
+  firmware:
+    name: Firmware Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python (for PlatformIO)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware
+        run: |
+          cd src/firmware
+          pio run

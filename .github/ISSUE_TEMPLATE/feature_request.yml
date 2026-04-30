@@ -1,0 +1,55 @@
+name: Feature Request
+description: Propose new functionality or an improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Features should map to a phase in the [roadmap](../../team-docs/roadmap.md).
+        If your feature isn't on the roadmap, discuss it in a meeting first.
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Roadmap Phase
+      options:
+        - "Phase 0 — Infrastructure"
+        - "Phase 1 — Single Motor Control"
+        - "Phase 2 — Simulation Setup"
+        - "Phase 3 — Kinematics"
+        - "Phase 4 — Static Walking"
+        - "Phase 5 — Hardware Integration"
+        - "Phase 6 — Autonomy & AI"
+        - "Not on roadmap (needs discussion)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this solve? Why does it matter?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should it work? Be as specific as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches did you consider and why did you reject them?
+
+  - type: textarea
+    id: definition_of_done
+    attributes:
+      label: Definition of Done
+      description: How will we know this feature is complete? What tests prove it works?
+    validations:
+      required: true

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# PlatformIO
+src/firmware/.pio/
+src/firmware/.vscode/
+
+# MuJoCo
+*.mjb
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets / credentials — never commit these
+*.env
+.env*
+secrets.*
