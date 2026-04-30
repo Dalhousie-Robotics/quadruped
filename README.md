@@ -8,12 +8,12 @@ A campus-autonomous quadruped robot with AI-driven student interaction, built by
 
 | Resource | Link |
 |---|---|
-| Onboarding (start here) | https://github.com/Dalhousie-Robotics/onboarding |
-| Team Roadmap | https://github.com/Dalhousie-Robotics/team-docs/blob/main/roadmap.md |
+| Onboarding (start here) | https://github.com/Dalhousie-Robotics/software-onboarding |
+| Team Roadmap | https://github.com/Dalhousie-Robotics/software-docs/blob/main/roadmap.md |
 | Architecture Overview | [docs/architecture.md](docs/architecture.md) |
 | Contributing Guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Meeting Notes | https://github.com/Dalhousie-Robotics/team-docs/tree/main/meetings |
-| ML Interface Agreement | https://github.com/Dalhousie-Robotics/team-docs/blob/main/ml_interface_agreement.md |
+| Meeting Notes | https://github.com/Dalhousie-Robotics/software-docs/tree/main/meetings |
+| ML Interface Agreement | https://github.com/Dalhousie-Robotics/software-docs/blob/main/ml_interface_agreement.md |
 
 ---
 
@@ -92,7 +92,7 @@ quadruped/
 
 ## Getting Started
 
-1. Follow the [Onboarding Guide](https://github.com/Dalhousie-Robotics/onboarding) — do not skip this.
+1. Follow the [Onboarding Guide](https://github.com/Dalhousie-Robotics/software-onboarding) — do not skip this.
 2. Find your name in the team table below and pick up your assigned task.
 3. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening your first PR.
 
@@ -138,4 +138,4 @@ quadruped/
 
 **Phase 0 — Infrastructure** (active)
 
-See the full [roadmap](https://github.com/Dalhousie-Robotics/team-docs/blob/main/roadmap.md) for phase breakdown.
+See the full [roadmap](https://github.com/Dalhousie-Robotics/software-docs/blob/main/roadmap.md) for phase breakdown.
