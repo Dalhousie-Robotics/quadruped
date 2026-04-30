@@ -8,6 +8,7 @@ A campus-autonomous quadruped robot with AI-driven student interaction, built by
 
 | Resource | Link |
 |---|---|
+| Task Board | https://github.com/orgs/Dalhousie-Robotics/projects/1 |
 | Onboarding (start here) | https://github.com/Dalhousie-Robotics/software-onboarding |
 | Team Roadmap | https://github.com/Dalhousie-Robotics/software-docs/blob/main/roadmap.md |
 | Architecture Overview | [docs/architecture.md](docs/architecture.md) |
@@ -92,8 +93,8 @@ quadruped/
 
 ## Getting Started
 
-1. Follow the [Onboarding Guide](https://github.com/Dalhousie-Robotics/software-onboarding) — do not skip this.
-2. Find your name in the team table below and pick up your assigned task.
+1. Follow the [Onboarding Guide](https://github.com/Dalhousie-Robotics/software-onboarding) -- do not skip this.
+2. Go to the [Task Board](https://github.com/orgs/Dalhousie-Robotics/projects/1) and pick up an issue tagged `good-first-issue`.
 3. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening your first PR.
 
 ---
