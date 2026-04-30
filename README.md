@@ -8,12 +8,12 @@ A campus-autonomous quadruped robot with AI-driven student interaction, built by
 
 | Resource | Link |
 |---|---|
-| Onboarding (start here) | [`../onboarding/`](../onboarding/README.md) |
-| Team Roadmap | [`../team-docs/roadmap.md`](../team-docs/roadmap.md) |
-| Architecture Overview | [`docs/architecture.md`](docs/architecture.md) |
-| Contributing Guide | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
-| Meeting Notes | [`../team-docs/meetings/`](../team-docs/meetings/) |
-| GitHub Projects Board | https://github.com/orgs/dal-robotics/projects/1 |
+| Onboarding (start here) | https://github.com/Dalhousie-Robotics/onboarding |
+| Team Roadmap | https://github.com/Dalhousie-Robotics/team-docs/blob/main/roadmap.md |
+| Architecture Overview | [docs/architecture.md](docs/architecture.md) |
+| Contributing Guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Meeting Notes | https://github.com/Dalhousie-Robotics/team-docs/tree/main/meetings |
+| ML Interface Agreement | https://github.com/Dalhousie-Robotics/team-docs/blob/main/ml_interface_agreement.md |
 
 ---
 
