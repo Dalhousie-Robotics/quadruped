@@ -92,23 +92,45 @@ quadruped/
 
 ## Getting Started
 
-1. Follow the [Onboarding Guide](../onboarding/README.md) — do not skip this.
-2. Pick up an issue tagged `good-first-issue` on the [Projects board](https://github.com/orgs/dal-robotics/projects/1).
+1. Follow the [Onboarding Guide](https://github.com/Dalhousie-Robotics/onboarding) — do not skip this.
+2. Find your name in the team table below and pick up your assigned task.
 3. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening your first PR.
 
 ---
 
 ## Team
 
-| Role | Person | GitHub |
-|---|---|---|
-| Software Lead | | |
-| Firmware Engineer | | |
-| Simulation Engineer | | |
-| Kinematics & Control | | |
-| ML Interface | | |
+### Firmware
+*Writes C++ code that runs on the ESP32 — handles CAN bus communication with motors in real time.*
 
-*Update this table when roles are assigned.*
+| Name | GitHub | Current Task |
+|---|---|---|
+| | | |
+| | | |
+
+### Simulation
+*Builds and maintains the MuJoCo robot model — lets the team test algorithms without touching hardware.*
+
+| Name | GitHub | Current Task |
+|---|---|---|
+| | | |
+
+### Kinematics & Control
+*Writes Python algorithms for leg movement — forward/inverse kinematics, gait planning, foot trajectories.*
+
+| Name | GitHub | Current Task |
+|---|---|---|
+| | | |
+| | | |
+
+### Integration & Lead
+*Maintains repo health, reviews all PRs, coordinates between areas, owns the architecture.*
+
+| Name | GitHub | Current Task |
+|---|---|---|
+| | | Software Lead |
+
+*Fill in names and tasks when roles are assigned at the first meeting.*
 
 ---
 
@@ -116,4 +138,4 @@ quadruped/
 
 **Phase 0 — Infrastructure** (active)
 
-See [roadmap](../team-docs/roadmap.md) for full phase breakdown.
+See the full [roadmap](https://github.com/Dalhousie-Robotics/team-docs/blob/main/roadmap.md) for phase breakdown.
