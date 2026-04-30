@@ -32,7 +32,7 @@ public:
     // Exit MIT mode. Always call this on shutdown.
     static void exit_mode(uint8_t id);
 
-    // Set motor zero position (use carefully — saves to flash on motor).
+    // Set motor zero position (use carefully, saves to flash on motor).
     static void set_zero(uint8_t id);
 
     // Send a MIT-mode command and read back state synchronously.

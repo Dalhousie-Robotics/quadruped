@@ -14,7 +14,7 @@ void setup() {
     PC_SERIAL.println("[boot] Dal Robotics Quadruped Firmware");
 
     if (!AK40Driver::begin(CAN_TX_PIN, CAN_RX_PIN)) {
-        PC_SERIAL.println("[error] CAN bus init failed — check wiring");
+        PC_SERIAL.println("[error] CAN bus init failed, check wiring");
         while (true) delay(1000);
     }
 
@@ -22,7 +22,7 @@ void setup() {
 }
 
 void loop() {
-    // Main control loop — placeholder
+    // Main control loop placeholder
     // TODO Phase 1: receive command from PC, send to motors, read back state
     delay(1);
 }

@@ -1,4 +1,4 @@
-# Dal Robotics — Quadruped Robot
+# Dal Robotics Quadruped Robot
 
 A campus-autonomous quadruped robot with AI-driven student interaction, built by the Dal Robotics club at Dalhousie University.
 
@@ -102,7 +102,7 @@ quadruped/
 ## Team
 
 ### Firmware
-*Writes C++ code that runs on the ESP32 — handles CAN bus communication with motors in real time.*
+*Writes C++ code that runs on the ESP32, handling CAN bus communication with motors in real time.*
 
 | Name | GitHub | Current Task |
 |---|---|---|
@@ -110,14 +110,14 @@ quadruped/
 | | | |
 
 ### Simulation
-*Builds and maintains the MuJoCo robot model — lets the team test algorithms without touching hardware.*
+*Builds and maintains the MuJoCo robot model, letting the team test algorithms without touching hardware.*
 
 | Name | GitHub | Current Task |
 |---|---|---|
 | | | |
 
 ### Kinematics & Control
-*Writes Python algorithms for leg movement — forward/inverse kinematics, gait planning, foot trajectories.*
+*Writes Python algorithms for leg movement: forward/inverse kinematics, gait planning, foot trajectories.*
 
 | Name | GitHub | Current Task |
 |---|---|---|
@@ -137,6 +137,6 @@ quadruped/
 
 ## Current Status
 
-**Phase 0 — Infrastructure** (active)
+**Phase 0: Infrastructure** (active)
 
 See the full [roadmap](https://github.com/Dalhousie-Robotics/software-docs/blob/main/roadmap.md) for phase breakdown.
