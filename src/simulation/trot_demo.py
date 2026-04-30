@@ -1,10 +1,12 @@
 """
-trot_demo.py -- Open-loop trot gait demonstration.
+trot_demo.py -- Open-loop trot gait on the Unitree A1 model.
 
-Diagonal leg pairs move together (FL+RR, FR+RL). Each leg follows a
-sinusoidal hip trajectory with a knee lift during the swing phase.
-This is an open-loop preview of Phase 4 -- no balance feedback yet,
-so the robot may drift or fall on a long run.
+The A1 uses position actuators (kp=100 built in), so we write target
+joint angles directly to data.ctrl -- no separate PD controller needed.
+
+Trot pattern: diagonal pairs move together.
+  FL + RR share one phase.
+  FR + RL share the opposite phase (offset by pi).
 
 Usage:
     python src/simulation/trot_demo.py
@@ -16,32 +18,29 @@ Controls:
 """
 
 import os
-import time
 import numpy as np
 import mujoco
 import mujoco.viewer
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "quadruped.xml")
+SCENE_PATH = os.path.join(os.path.dirname(__file__), "models", "unitree_a1", "scene.xml")
 
 # ---------------------------------------------------------------------------
-# Gait parameters -- tune these to change the walk
+# Standing pose (matches the "home" keyframe in a1.xml)
 # ---------------------------------------------------------------------------
-GAIT_FREQ      = 1.4    # Hz  -- step frequency (higher = faster steps)
-HIP_FE_CENTER  = 0.50   # rad -- nominal hip angle (forward lean)
-HIP_FE_AMP     = 0.26   # rad -- how far the hip swings each step
-KNEE_STANCE    = -1.30  # rad -- knee angle when foot is on the ground
-KNEE_SWING     = -1.85  # rad -- knee angle at peak of swing (foot lift height)
-HIP_AB         = 0.0    # rad -- lateral hip (0 = straight)
-
-PD_KP          = 45.0   # Nm/rad -- position gain
-PD_KD          = 1.5    # Nm-s/rad -- damping gain
-
-WARMUP_SECS    = 0.8    # seconds to stand still before walking starts
+STAND_HIP   =  0.0   # abduction/adduction -- 0 = straight
+STAND_THIGH =  0.9   # hip flexion  (rad)
+STAND_CALF  = -1.8   # knee flexion (rad, negative = bent)
 
 # ---------------------------------------------------------------------------
-# Trot phase offsets  (diagonal pairs share the same phase)
-#   FL + RR = pair A    (phase offset 0)
-#   FR + RL = pair B    (phase offset pi = half cycle behind)
+# Gait parameters -- tune here
+# ---------------------------------------------------------------------------
+GAIT_FREQ   = 1.4    # Hz -- step frequency
+THIGH_AMP   = 0.28   # rad -- how far each thigh swings per step
+CALF_LIFT   = 0.50   # rad -- extra knee bend at peak of swing (foot height)
+WARMUP_SECS = 1.5    # seconds to hold standing before walking starts
+
+# ---------------------------------------------------------------------------
+# Phase offsets for trot (diagonal pairs)
 # ---------------------------------------------------------------------------
 PHASE_OFFSET = {
     "FL": 0.0,
@@ -50,91 +49,83 @@ PHASE_OFFSET = {
     "RL": np.pi,
 }
 
-
-def leg_targets(leg: str, gait_phase: float) -> tuple[float, float, float]:
-    """
-    Return (hip_ab, hip_fe, knee) targets for one leg at the given gait phase.
-
-    The gait cycle for each leg (after adding its phase offset):
-      0  -> pi   : SWING  -- foot in the air, hip moving forward
-      pi -> 2*pi : STANCE -- foot on ground, hip moving backward (propels body)
-    """
-    phase = (gait_phase + PHASE_OFFSET[leg]) % (2.0 * np.pi)
-
-    # Hip fe: sinusoidal.
-    #   sin > 0 (swing)   -> hip forward of center
-    #   sin < 0 (stance)  -> hip behind center (body pushed forward)
-    hip_fe = HIP_FE_CENTER + HIP_FE_AMP * np.sin(phase)
-
-    # Knee: lift during swing (0 to pi), hold stance angle otherwise.
-    if phase < np.pi:
-        swing_factor = np.sin(phase)          # 0 -> 1 -> 0, smooth bell curve
-        knee = KNEE_STANCE + (KNEE_SWING - KNEE_STANCE) * swing_factor
-    else:
-        knee = KNEE_STANCE
-
-    return HIP_AB, hip_fe, knee
+# ---------------------------------------------------------------------------
+# Actuator name lookup (matches a1.xml <actuator> block)
+# ---------------------------------------------------------------------------
+ACT_NAMES = {
+    "FL": ("FL_hip", "FL_thigh", "FL_calf"),
+    "FR": ("FR_hip", "FR_thigh", "FR_calf"),
+    "RL": ("RL_hip", "RL_thigh", "RL_calf"),
+    "RR": ("RR_hip", "RR_thigh", "RR_calf"),
+}
 
 
-def pd_control(model, data, targets: dict, kp: float, kd: float) -> None:
-    """Apply PD torque control toward `targets` (joint_name -> angle_rad)."""
-    for joint_name, target_pos in targets.items():
-        j_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT,    joint_name)
-        a_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, joint_name + "_act")
-        if j_id < 0 or a_id < 0:
-            continue
-        pos    = data.qpos[model.jnt_qposadr[j_id]]
-        vel    = data.qvel[model.jnt_dofadr[j_id]]
-        torque = kp * (target_pos - pos) - kd * vel
-        data.ctrl[a_id] = float(np.clip(torque, -18.0, 18.0))
+def build_act_index(model) -> dict:
+    """Return a dict: actuator_name -> ctrl index."""
+    idx = {}
+    for i in range(model.nu):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i)
+        if name:
+            idx[name] = i
+    return idx
 
 
-def stand_targets() -> dict:
-    """Joint targets for the neutral standing pose."""
-    targets = {}
-    for leg in ("FL", "FR", "RL", "RR"):
-        targets[f"{leg}_hip_ab"] = 0.0
-        targets[f"{leg}_hip_fe"] = HIP_FE_CENTER
-        targets[f"{leg}_knee"]   = KNEE_STANCE
-    return targets
+def set_stand(data, act_idx: dict) -> None:
+    """Write the standing pose to all actuators."""
+    for leg, (hip, thigh, calf) in ACT_NAMES.items():
+        data.ctrl[act_idx[hip]]   = STAND_HIP
+        data.ctrl[act_idx[thigh]] = STAND_THIGH
+        data.ctrl[act_idx[calf]]  = STAND_CALF
+
+
+def set_trot(data, act_idx: dict, gait_phase: float) -> None:
+    """Write trot joint targets to all actuators."""
+    for leg, (hip_name, thigh_name, calf_name) in ACT_NAMES.items():
+        phase = (gait_phase + PHASE_OFFSET[leg]) % (2.0 * np.pi)
+
+        # Thigh: sinusoidal swing.
+        #   sin > 0 (swing, 0->pi):    thigh moves forward (increases, repositioning foot)
+        #   sin < 0 (stance, pi->2pi): thigh moves backward (decreases, pushes body forward)
+        thigh = STAND_THIGH + THIGH_AMP * np.sin(phase)
+
+        # Calf: lift during swing only.
+        swing_factor = max(0.0, np.sin(phase))   # 0 during stance, bell curve during swing
+        calf = STAND_CALF - CALF_LIFT * swing_factor
+
+        data.ctrl[act_idx[hip_name]]   = STAND_HIP
+        data.ctrl[act_idx[thigh_name]] = thigh
+        data.ctrl[act_idx[calf_name]]  = calf
 
 
 def main() -> None:
-    print("Loading model:", MODEL_PATH)
-    model = mujoco.MjModel.from_xml_path(MODEL_PATH)
+    print("Loading Unitree A1 model...")
+    model = mujoco.MjModel.from_xml_path(SCENE_PATH)
     data  = mujoco.MjData(model)
 
-    # Start from the keyframe standing pose
-    key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "stand")
+    # Start from the home keyframe
+    key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     mujoco.mj_resetDataKeyframe(model, data, key_id)
     mujoco.mj_forward(model, data)
 
-    print(f"Gait: trot  freq={GAIT_FREQ} Hz  hip_amp={HIP_FE_AMP} rad")
-    print(f"      kp={PD_KP}  kd={PD_KD}")
-    print(f"Warming up for {WARMUP_SECS}s then walking starts.")
+    act_idx = build_act_index(model)
+
+    print(f"Trot gait: freq={GAIT_FREQ} Hz  thigh_amp={THIGH_AMP} rad  calf_lift={CALF_LIFT} rad")
+    print(f"Standing for {WARMUP_SECS}s then walking starts.")
     print("Space=pause  Backspace=reset  Esc=quit")
 
-    sim_time  = 0.0
-    dt        = model.opt.timestep
+    sim_time = 0.0
+    dt       = model.opt.timestep
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         while viewer.is_running():
 
             if sim_time < WARMUP_SECS:
-                # Hold standing pose while the robot settles
-                targets = stand_targets()
+                set_stand(data, act_idx)
             else:
-                # Trot gait
                 walk_time  = sim_time - WARMUP_SECS
                 gait_phase = (2.0 * np.pi * GAIT_FREQ * walk_time) % (2.0 * np.pi)
-                targets    = {}
-                for leg in ("FL", "FR", "RL", "RR"):
-                    hab, hfe, kne = leg_targets(leg, gait_phase)
-                    targets[f"{leg}_hip_ab"] = hab
-                    targets[f"{leg}_hip_fe"] = hfe
-                    targets[f"{leg}_knee"]   = kne
+                set_trot(data, act_idx, gait_phase)
 
-            pd_control(model, data, targets, PD_KP, PD_KD)
             mujoco.mj_step(model, data)
             sim_time += dt
             viewer.sync()
