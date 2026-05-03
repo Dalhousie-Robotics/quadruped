@@ -8,12 +8,12 @@ This document describes the software and firmware architecture of the Dal Roboti
 
 The system is divided into two compute domains:
 
-| Domain | Hardware | Language | Responsibility |
-|---|---|---|---|
-| On-robot (embedded) | STM32F446RE | C++ | Real-time motor control, CAN bus communication |
-| Off-robot (PC) | Windows PC | Python | Gait planning, simulation, high-level commands |
+| Domain | Hardware | Language | Toolchain | Responsibility |
+|---|---|---|---|---|
+| On-robot (embedded) | STM32F446RE | C | STM32CubeIDE / HAL | Real-time motor control, CAN bus |
+| Off-robot (PC) | Windows PC | Python | VS Code | Gait planning, simulation, high-level commands |
 
-These two domains communicate over **USB Serial** during development. Wireless (WiFi via UART-attached module) is planned for Phase 5+.
+These two domains communicate over **USART2 via ST-Link virtual COM** during development. Wireless (WiFi via UART-attached module) is planned for Phase 5+.
 
 ---
 
@@ -30,14 +30,14 @@ These two domains communicate over **USB Serial** during development. Wireless (
 |  body pose controller, command dispatcher            |
 +------------------------------------------------------+
 |  LAYER 3: Kinematics (PC / Python)                   |
-|  Forward kinematics (FK), Inverse kinematics (IK)   |
+|  Forward kinematics (FK), Inverse kinematics (IK)    |
 |  for all 4 legs                                      |
 +------------------------------------------------------+
-|  LAYER 2: Serial Protocol (USB Serial / WiFi UDP)    |
+|  LAYER 2: Serial Protocol (USART2 / WiFi UDP)        |
 |  ASCII command packets: joint targets -> STM32       |
-|  Joint states, IMU data <- STM32                     |
+|  Joint states <- STM32                               |
 +------------------------------------------------------+
-|  LAYER 1: STM32F446RE Firmware (C++)                 |
+|  LAYER 1: STM32F446RE Firmware (C / CubeIDE / HAL)  |
 |  Receives joint targets, encodes MIT CAN frames,     |
 |  reads back motor state, safety watchdog             |
 +------------------------------------------------------+
@@ -48,43 +48,51 @@ These two domains communicate over **USB Serial** during development. Wireless (
 
 ---
 
+## STM32 Pin Assignments (Nucleo F446RE)
+
+| Pin | Peripheral | Function |
+|---|---|---|
+| PA2 | USART2 TX | Serial to PC (via ST-Link virtual COM) |
+| PA3 | USART2 RX | Serial from PC |
+| PA11 | CAN1 RX | From CAN transceiver CRXD |
+| PA12 | CAN1 TX | To CAN transceiver CTXD |
+
+**CAN bus speed:** 1 Mbit/s
+**USART2 baud rate:** 115200
+
+**CAN timing for 1 Mbit/s at 90 MHz APB1:**
+Prescaler=9, TimeSeg1=6, TimeSeg2=3, SJW=1
+
+---
+
 ## Communication Protocol (PC to STM32)
 
-The PC sends ASCII commands over USB Serial. This keeps the protocol debuggable with any terminal. A binary format may be adopted later for deployed performance (see ADR-003).
+ASCII commands over USART2, newline-terminated.
 
-### Command (PC -> STM32)
+### Commands (PC -> STM32)
 
 ```
-CMD <id> <pos> <vel> <kp> <kd> <torque_ff>\n
-ENTER <id>\n
-EXIT <id>\n
-ZERO <id>\n
+enable <id>
+disable <id>
+zero <id>
+pos <id> <rad>
+stop
+status
 ```
-
-- `id`: motor CAN ID (1-12)
-- `pos`: target position in radians
-- `vel`: target velocity in rad/s
-- `kp`: position gain in Nm/rad (0-500)
-- `kd`: damping gain in Nm-s/rad (0-5)
-- `torque_ff`: feedforward torque in Nm (-18 to +18)
 
 ### Response (STM32 -> PC)
 
 ```
-STATE <id> <pos> <vel> <torque>\n
-[ok] ...\n
-[error] ...\n
+STATE <id> <pos_rad> <vel_rad_s> <torque_Nm>
+[ok] ...
+[error] ...
 ```
-
-All values are space-separated ASCII floats. State is sent in response to each CMD.
 
 ---
 
 ## CAN Bus Architecture
 
-Each AK40-10 motor has a unique CAN ID (1-12). The STM32F446RE uses its built-in **bxCAN** peripheral (CAN 2.0B compatible). An external CAN transceiver (e.g. SN65HVD230) is required between the STM32 and the CAN bus wires -- the Electrical team provides this.
-
-**CAN1 pins on Nucleo F446RE:** RX = PB8, TX = PB9
+Each AK40-10 motor has a unique CAN ID (1-12). The STM32F446RE uses its built-in **bxCAN** peripheral (CAN 2.0B). An external CAN transceiver (SN65HVD230 or TJA1050) is required between the STM32 and the CAN bus wires. The Electrical team provides this circuit.
 
 Motor ID assignment:
 
@@ -103,37 +111,35 @@ Motor ID assignment:
 | 11 | Hip Flexion/Extension | Rear Right |
 | 12 | Knee | Rear Right |
 
-CAN bus speed: **1 Mbit/s** (AK40-10 default).
-
 ---
 
 ## MIT Mini Cheetah CAN Protocol
 
 The AK40-10 uses the MIT Mini Cheetah actuator protocol. Each CAN frame is 8 bytes.
 
-### Command frame (host -> motor)
+### Command frame (STM32 -> motor)
 
 ```
 Byte [0:1]  position target     (uint16, maps to -12.5 to +12.5 rad)
-Byte [2]    velocity [11:4]     (upper 8 bits of 12-bit velocity)
+Byte [2]    velocity [11:4]
 Byte [3]    vel [3:0] | kp[11:8]
-Byte [4]    kp [7:0]            (12-bit kp, maps to 0 to 500 Nm/rad)
-Byte [5]    kd [11:4]           (upper 8 bits of 12-bit kd)
-Byte [6]    kd [3:0] | t[11:8]  (kd maps to 0 to 5 Nm-s/rad)
-Byte [7]    torque_ff [7:0]     (12-bit torque, maps to -18 to +18 Nm)
+Byte [4]    kp [7:0]             (12-bit, maps to 0 to 500 Nm/rad)
+Byte [5]    kd [11:4]
+Byte [6]    kd [3:0] | t[11:8]   (kd maps to 0 to 5 Nm-s/rad)
+Byte [7]    torque_ff [7:0]      (12-bit, maps to -18 to +18 Nm)
 ```
 
-### Response frame (motor -> host)
+### Response frame (motor -> STM32)
 
 ```
 Byte [0]    Motor ID
-Byte [1:2]  position  (uint16, same mapping as command)
-Byte [3:4]  velocity  (12-bit, upper 8 bits in [3], lower 4 in [4][7:4])
-Byte [4:5]  torque    (12-bit, lower 4 of [4] are upper bits)
-Byte [6:7]  temperature and error flags (not decoded in Phase 1)
+Byte [1:2]  position
+Byte [3:4]  velocity (12-bit packed)
+Byte [4:5]  torque   (12-bit packed)
+Byte [6:7]  temperature and error flags
 ```
 
-Special frames (sent to motor CAN ID):
+### Special frames (to motor CAN ID)
 
 | Frame | Last byte | Purpose |
 |---|---|---|
@@ -150,20 +156,16 @@ The simulation mirrors the real system using the same Python control code. A `Si
 ```
 src/control/gait_controller.py
     uses: MotorInterface (abstract)
-          -- SerialMotorInterface  (real STM32 path over USB Serial)
+          -- SerialMotorInterface  (real STM32 path via USART2)
           -- SimMotorInterface     (MuJoCo path)
 ```
-
-The MJCF model lives in `src/simulation/models/`. All physical parameters (link lengths, masses, inertias) must match the mechanical team's CAD.
 
 ---
 
 ## Key Design Decisions
 
-See `docs/decisions/` for Architecture Decision Records (ADRs).
-
 | ADR | Decision |
 |---|---|
-| ADR-001 | Use STM32F446RE + PlatformIO for motor control firmware |
+| ADR-001 | Use STM32F446RE + STM32CubeIDE + HAL C for motor control firmware |
 | ADR-002 | Use MuJoCo for simulation |
 | ADR-003 | Wire protocol between PC and STM32 (TBD) |
