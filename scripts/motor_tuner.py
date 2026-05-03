@@ -2,8 +2,8 @@
 """
 motor_tuner.py -- Interactive terminal interface for AK40-10 motor control.
 
-Connects to the STM32F446RE over USB Serial and lets you command individual
-motors, adjust kp/kd gains live, and watch motor state feedback in real time.
+Connects to the STM32F446RE over USB Serial (USART2 via ST-Link virtual COM)
+and lets you command individual motors and watch motor state feedback in real time.
 
 Usage:
     python motor_tuner.py              # auto-detect STM32 COM port
@@ -14,6 +14,17 @@ Requirements:
 
 Motor state is printed as it arrives from the STM32 in the background.
 All position values are in radians. Velocity in rad/s. Torque in Nm.
+
+Firmware command protocol (CubeIDE / HAL build):
+    enable <id>        -- Enter MIT mode on motor
+    disable <id>       -- Exit MIT mode on motor
+    zero <id>          -- Set zero position (writes to motor flash)
+    pos <id> <rad>     -- Move to position in radians
+    stop               -- Disable all active motors
+    status             -- Print firmware status
+
+Note: kp and kd gains are set in firmware (ak40_driver.h constants).
+      To change gains, edit AK40_KP_DEFAULT / AK40_KD_DEFAULT and reflash.
 """
 
 import sys
@@ -22,31 +33,22 @@ import threading
 import serial
 import serial.tools.list_ports
 
-# -----------------------------------------------------------------------
-# Default gains -- safe starting values for a benchtop single-motor test.
-# Increase kp for stiffer position holding. Increase kd to damp oscillation.
-# AK40-10 ranges: kp 0-500 Nm/rad, kd 0-5 Nm-s/rad
-# -----------------------------------------------------------------------
-DEFAULT_KP = 5.0
-DEFAULT_KD = 0.5
-
 HELP_TEXT = """
 Commands
 --------
   motor <id>               Select active motor (1-12)
-  enter                    Enter MIT mode on active motor
-  exit                     Exit MIT mode on active motor
+  enable                   Enter MIT mode on active motor
+  disable                  Exit MIT mode on active motor
   zero                     Set zero position (writes to motor flash -- use carefully)
-  goto <pos>               Move to position [rad]
-  goto <pos> <vel>         Move to position at velocity [rad/s]
-  kp <value>               Set position gain (0 - 500 Nm/rad)
-  kd <value>               Set damping gain (0 - 5 Nm-s/rad)
-  gains                    Print current kp and kd
+  goto <pos>               Move to position [rad]  (alias: pos)
+  stop                     Disable all active motors
+  status                   Request firmware status
   state                    Print last received motor state
-  hold                     Re-send last position command
-  off                      Release motor (zero torque, zero gains)
   help                     Show this message
-  quit                     Exit MIT mode and disconnect
+  quit                     Disable active motor and disconnect
+
+Note: kp/kd gains are fixed in firmware. Edit AK40_KP_DEFAULT / AK40_KD_DEFAULT
+      in ak40_driver.h and reflash to change them.
 """
 
 
@@ -56,8 +58,6 @@ class MotorTuner:
     def __init__(self, port: str, baud: int = 115200):
         self.ser = serial.Serial(port, baud, timeout=0.05)
         self.motor_id: int = 1
-        self.kp: float = DEFAULT_KP
-        self.kd: float = DEFAULT_KD
         self._last_state: dict[int, tuple[float, float, float]] = {}
         self._stop = threading.Event()
         self._lock = threading.Lock()
@@ -82,6 +82,7 @@ class MotorTuner:
                 if not line:
                     continue
                 if line.startswith("STATE "):
+                    # STATE <id> <pos_rad> <vel_rad_s> <torque_Nm>
                     parts = line.split()
                     if len(parts) == 5:
                         mid = int(parts[1])
@@ -99,29 +100,27 @@ class MotorTuner:
                 pass
 
     # ------------------------------------------------------------------
-    # Motor commands
+    # Motor commands -- match CubeIDE firmware protocol exactly
     # ------------------------------------------------------------------
 
-    def enter_mode(self, mid: int | None = None) -> None:
-        self._send(f"ENTER {mid or self.motor_id}")
+    def enable(self, mid: int | None = None) -> None:
+        self._send(f"enable {mid or self.motor_id}")
 
-    def exit_mode(self, mid: int | None = None) -> None:
-        self._send(f"EXIT {mid or self.motor_id}")
+    def disable(self, mid: int | None = None) -> None:
+        self._send(f"disable {mid or self.motor_id}")
 
     def set_zero(self, mid: int | None = None) -> None:
-        self._send(f"ZERO {mid or self.motor_id}")
+        self._send(f"zero {mid or self.motor_id}")
 
-    def send_command(
-        self,
-        pos: float,
-        vel: float = 0.0,
-        torque_ff: float = 0.0,
-        mid: int | None = None,
-    ) -> None:
+    def send_pos(self, pos: float, mid: int | None = None) -> None:
         m = mid or self.motor_id
-        self._send(
-            f"CMD {m} {pos:.4f} {vel:.4f} {self.kp:.4f} {self.kd:.4f} {torque_ff:.4f}"
-        )
+        self._send(f"pos {m} {pos:.4f}")
+
+    def stop_all(self) -> None:
+        self._send("stop")
+
+    def request_status(self) -> None:
+        self._send("status")
 
     # ------------------------------------------------------------------
     # State display
@@ -140,9 +139,6 @@ class MotorTuner:
             )
         else:
             print(f"  motor {self.motor_id}: no state received yet")
-
-    def print_gains(self) -> None:
-        print(f"  kp = {self.kp}  kd = {self.kd}")
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -195,10 +191,8 @@ def main() -> None:
     tuner = MotorTuner(port)
     time.sleep(2.5)  # wait for STM32 boot messages
 
-    print(f"Ready.  Active motor: {tuner.motor_id}  kp={tuner.kp}  kd={tuner.kd}")
+    print(f"Ready.  Active motor: {tuner.motor_id}")
     print("Type 'help' for a list of commands.\n")
-
-    last_pos: float = 0.0
 
     try:
         while True:
@@ -215,8 +209,8 @@ def main() -> None:
 
             # --- quit ---
             if cmd == "quit":
-                print(f"Sending exit mode to motor {tuner.motor_id}...")
-                tuner.exit_mode()
+                print(f"Disabling motor {tuner.motor_id}...")
+                tuner.disable()
                 time.sleep(0.2)
                 break
 
@@ -236,15 +230,15 @@ def main() -> None:
                     else:
                         print("  Motor ID must be 1-12")
 
-            # --- enter ---
-            elif cmd == "enter":
-                tuner.enter_mode()
-                print(f"  Enter mode sent to motor {tuner.motor_id}")
+            # --- enable ---
+            elif cmd == "enable":
+                tuner.enable()
+                print(f"  enable sent to motor {tuner.motor_id}")
 
-            # --- exit ---
-            elif cmd == "exit":
-                tuner.exit_mode()
-                print(f"  Exit mode sent to motor {tuner.motor_id}")
+            # --- disable ---
+            elif cmd == "disable":
+                tuner.disable()
+                print(f"  disable sent to motor {tuner.motor_id}")
 
             # --- zero ---
             elif cmd == "zero":
@@ -258,62 +252,28 @@ def main() -> None:
                 else:
                     print("  Cancelled.")
 
-            # --- goto <pos> [vel] ---
-            elif cmd == "goto":
+            # --- goto / pos <pos> ---
+            elif cmd in ("goto", "pos"):
                 if len(parts) < 2:
-                    print("  Usage: goto <pos_rad> [vel_rad_s]")
+                    print("  Usage: goto <pos_rad>")
                 else:
                     pos = float(parts[1])
-                    vel = float(parts[2]) if len(parts) > 2 else 0.0
-                    last_pos = pos
-                    tuner.send_command(pos, vel)
+                    tuner.send_pos(pos)
                     time.sleep(0.08)
                     tuner.print_state()
 
-            # --- kp <value> ---
-            elif cmd == "kp":
-                if len(parts) < 2:
-                    print(f"  kp = {tuner.kp}  (range 0 - 500 Nm/rad)")
-                else:
-                    val = float(parts[1])
-                    if 0.0 <= val <= 500.0:
-                        tuner.kp = val
-                        print(f"  kp = {tuner.kp}")
-                    else:
-                        print("  kp must be between 0 and 500")
+            # --- stop ---
+            elif cmd == "stop":
+                tuner.stop_all()
+                print("  stop sent (all motors disabled)")
 
-            # --- kd <value> ---
-            elif cmd == "kd":
-                if len(parts) < 2:
-                    print(f"  kd = {tuner.kd}  (range 0 - 5 Nm-s/rad)")
-                else:
-                    val = float(parts[1])
-                    if 0.0 <= val <= 5.0:
-                        tuner.kd = val
-                        print(f"  kd = {tuner.kd}")
-                    else:
-                        print("  kd must be between 0 and 5")
-
-            # --- gains ---
-            elif cmd == "gains":
-                tuner.print_gains()
+            # --- status ---
+            elif cmd == "status":
+                tuner.request_status()
 
             # --- state ---
             elif cmd == "state":
                 tuner.print_state()
-
-            # --- hold ---
-            elif cmd == "hold":
-                tuner.send_command(last_pos)
-                time.sleep(0.08)
-                tuner.print_state()
-
-            # --- off ---
-            elif cmd == "off":
-                tuner.kp = 0.0
-                tuner.kd = 0.0
-                tuner.send_command(last_pos, 0.0, 0.0)
-                print("  Motor released (kp=0, kd=0, torque=0). Set gains to re-engage.")
 
             else:
                 print(f"  Unknown command '{cmd}'. Type 'help'.")
